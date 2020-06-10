@@ -1,0 +1,266 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Deploy Trend Micro Cloud One Conformity LifeCycle hook in Control Tower Master
+
+Parameters:
+  CloudOneConformityApiKey:
+    Type: String
+    Description: Cloud One Conformity API Key
+    AllowedPattern : ".+"
+    NoEcho: True
+  CloudOneConformityRegion:
+    Type: String
+    Default: us-west-2
+    AllowedValues:
+      - ap-southeast-2
+      - eu-west-1
+      - us-west-2
+    Description: Cloud One Conformity region endpoint for your account
+    AllowedPattern : ".+"
+
+Mappings:
+  LifeCycleRelease:
+    Release:
+      Stamp: 1591713437
+
+Resources:
+  ConformityControlTowerResourceBucket:
+    Type: AWS::S3::Bucket
+  CopyLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: lambda-copier
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: "s3:GetObject"
+                Resource:
+                  - "arn:aws:s3:::trend-micro-cloud-one-conformity-controltower-lifecycle*"
+                  - "arn:aws:s3:::cloudconformity*"
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                  - "s3:DeleteObject"
+                Resource: !Sub 'arn:aws:s3:::${ConformityControlTowerResourceBucket}*'
+              - Effect: "Allow"
+                Action:
+                  - "cloudformation:DescribeStacks"
+                  - "cloudformation:ListStackResources"
+                  - "cloudformation:DescribeStackResource"
+                Resource: '*'
+              - Effect: "Allow"
+                Action:
+                  - "lambda:UpdateFunctionCode"
+                  - "lambda:PublishVersion"
+                Resource:
+                  - "arn:aws:lambda:*:*:function:*-ConnectorApiLambdaFunction*"
+  CopyLambda:
+    Type: Custom::CopyResource
+    Properties:
+      ServiceToken: !GetAtt 'CopyResourceFunction.Arn'
+      DestBucket: !Ref ConformityControlTowerResourceBucket
+      SourceBucket: trend-micro-cloud-one-conformity-controltower-lifecycle
+      Nonce: !FindInMap [LifeCycleRelease, Release, Stamp]
+      Prefix: ''
+      Objects:
+        - c1c-controltower-lifecycle.zip
+  CopyPolicy:
+    Type: Custom::CopyResource
+    Properties:
+      ServiceToken: !GetAtt 'CopyResourceFunction.Arn'
+      DestBucket: !Ref ConformityControlTowerResourceBucket
+      SourceBucket: cloudconformity
+      Nonce: !FindInMap [LifeCycleRelease, Release, Stamp]
+      Prefix: ''
+      Objects:
+        - iam-policies.json
+  LifeCycleConfig:
+    Type: Custom::CopyResource
+    Properties:
+      ServiceToken: !GetAtt 'ConnectorApiLambdaFunction.Arn'
+      Nonce: !FindInMap [LifeCycleRelease, Release, Stamp]
+  CopyResourceFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Copies objects from a source S3 bucket to a destination
+      Handler: index.handler
+      Runtime: python3.7
+      Role: !GetAtt CopyLambdaRole.Arn
+      Timeout: 900
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import logging
+          import boto3
+          logger = logging.getLogger(__name__)
+          def copy_objects(source_bucket, dest_bucket, prefix, objects):
+              s3 = boto3.client('s3')
+              for o in objects:
+                  key = prefix + o
+                  copy_source = {'Bucket': source_bucket, 'Key': key}
+                  logging.info(f'copy_source: {copy_source}\ndest_bucket: {dest_bucket}\nkey: {key}')
+                  s3.copy_object(CopySource=copy_source, Bucket=dest_bucket, Key=key)
+
+          def delete_objects(bucket, prefix, objects):
+              s3 = boto3.client('s3')
+              objects = {'Objects': [{'Key': prefix + o} for o in objects]}
+              s3.delete_objects(Bucket=bucket, Delete=objects)
+
+          def update_lambda(event, logical_resource_id, object):
+              key = event['ResourceProperties']['Prefix'] + event['ResourceProperties']['Objects'][object]
+              # only update function code for the zip
+              if (str.endswith("zip")):
+                  cloudformationClient = boto3.client('cloudformation')
+                  lambdaArn = cloudformationClient.describe_stack_resource(StackName=event['StackId'],
+                          LogicalResourceId=logical_resource_id)['StackResourceDetail']['PhysicalResourceId']
+                  logger.info(f'lambdaArn for {logical_resource_id} is {lambdaArn}')
+                  lambdaClient = boto3.client('lambda')
+                  response = lambdaClient.update_function_code(FunctionName=lambdaArn,
+                          S3Bucket=event['ResourceProperties']['DestBucket'], S3Key=key)
+                  logger.info(f'Response from update_function_call is: {response}')
+
+          def handler(event, context):
+              logger.info(f"Event received by handler: {event}")
+              status = cfnresponse.SUCCESS
+              try:
+                  if event['RequestType'] == 'Delete':
+                      delete_objects(event['ResourceProperties']['DestBucket'], event['ResourceProperties']['Prefix'],
+                                     event['ResourceProperties']['Objects'])
+                  else:
+                      copy_objects(event['ResourceProperties']['SourceBucket'], event['ResourceProperties']['DestBucket'],
+                                   event['ResourceProperties']['Prefix'], event['ResourceProperties']['Objects'])
+                      if event['RequestType'] == 'Update':
+                          logger.info(f'RequestType is Update; will update function code')
+                          # match logical resource id to item from Custom Resource Objects list
+                          update_lambda(event, 'ConnectorApiLambdaFunction', int(0))
+              except Exception:
+                  logging.error('Unhandled exception', exc_info=True)
+                  status = cfnresponse.FAILED
+              finally:
+                  cfnresponse.send(event, context, status, {}, None)
+
+
+  TrendMicroCloudOneConformityApiLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: TMCloudOneConformityApiLambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                  - "organizations:ListRoots"
+                  - "organizations:ListAccounts"
+                  - "sts:GetCallerIdentity"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "secretsmanager:GetSecretValue"
+                  - "secretsmanager:DescribeSecret"
+                  - "sts:AssumeRole"
+                Resource:
+                  - !Ref ApiKeySecret
+                  - "arn:aws:iam::*:role/*"
+              - Effect: Allow
+                Action: "s3:GetObject"
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ConformityControlTowerResourceBucket}*'
+              - Effect: Allow
+                Action: "lambda:InvokeFunction"
+                Resource:
+                  - "arn:aws:lambda:*:*:function:*-ConnectorApiLam*"
+              - Effect: Allow
+                Action:
+                  - "iam:CreatePolicy"
+                  - "iam:GetRole"
+                  - "iam:GetPolicyVersion"
+                  - "iam:DetachRolePolicy"
+                  - "iam:GetPolicy"
+                  - "iam:DeletePolicy"
+                  - "iam:CreateRole"
+                  - "iam:DeleteRole"
+                  - "iam:AttachRolePolicy"
+                  - "iam:CreatePolicyVersion"
+                  - "iam:DeletePolicyVersion"
+                  - "iam:SetDefaultPolicyVersion"
+                Resource:
+                  - "arn:aws:iam::*:role/CloudOneConformityConnectorRole"
+                  - "arn:aws:iam::*:policy/CloudOneConformityConnectorPolicy*"
+  ConnectorApiLambdaFunction:
+    DependsOn: CopyLambda
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Configures Conformity aws account for new Control Tower accounts
+      Environment:
+        Variables:
+          ConformityRegionEndpoint: !Ref CloudOneConformityRegion
+          ConformityPolicyBucket: !Ref ConformityControlTowerResourceBucket
+      Code:
+        S3Bucket: !Ref ConformityControlTowerResourceBucket
+        S3Key: c1c-controltower-lifecycle.zip
+      Handler: c1c-controltower-lifecycle.lambda_handler
+      Runtime: python3.7
+      Role: !GetAtt TrendMicroCloudOneConformityApiLambdaExecutionRole.Arn
+      MemorySize: 128
+      Timeout: 900
+  ApiKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: 'TrendMicro/CloudOne/ConformityApiKey'
+      SecretString: !Sub |
+        {
+          "ApiKey": "${CloudOneConformityApiKey}"
+        }
+  EventTriggerLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ConnectorApiLambdaFunction.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventRuleTrendMicroConformityLambdaTrigger.Arn
+  EventRuleTrendMicroConformityLambdaTrigger:
+    DependsOn:
+    - ConnectorApiLambdaFunction
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Capture Control Tower LifeCycle Events and Trigger an Action
+      EventPattern:
+        detail:
+          eventName:
+          - CreateManagedAccount
+          - UpdateManagedAccount
+          eventSource:
+          - controltower.amazonaws.com
+        detail-type:
+        - AWS Service Event via CloudTrail
+        source:
+        - aws.controltower
+      Name: C1ConformityCaptureControlTowerLifeCycleEvents
+      State: ENABLED
+      Targets:
+      - Arn: !GetAtt "ConnectorApiLambdaFunction.Arn"
+        Id: IDEventRuleTrendMicroConformityLambdaTrigger
