@@ -210,7 +210,7 @@ def update_policy(aws_account_id):
     policy_resource = sts_session.resource('iam')
     logger.info(f'Updating policy in account {aws_account_id}')
     try:
-        client.get_role(RoleName='CloudOneConformityConnectorRole')
+        client.get_role(RoleName=c1cresources.IamRoleName)
     except client.exceptions.NoSuchEntityException:
         logger.info(f'Policy not found; configuring account')
         configure_account(aws_account_id)
