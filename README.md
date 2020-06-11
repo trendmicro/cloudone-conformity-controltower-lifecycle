@@ -34,19 +34,21 @@ wizard, be sure to select the checkbox to acknowledge that this template may cre
 
 ### Implementation
 
-Once the stack is launched, a cloudwatch event rule will trigger the lifecycle lambda for each successful Control Tower
-Successful CreateManagedAccount event. The lifecycle lambda function will retrieve the Conformity ApiKey from AWS
-Secrets Manager, then get the External ID for your organization from the Conformity API. Next the lambda function will
-assume the ControlTowerExecution role in the target Managed Account in order to create the necessary cross account 
-role and associated policy. Finally, a call will be made to the Conformity API to add this Managed Account to your  
-Conformity Organization.
+During stack launch, the lifecycle lambda will be executed for each existing Control Tower Account, including the 
+Control Tower Master, Audit, and Log accounts. After launch, a cloudwatch event rule will trigger the lifecycle lambda 
+for each successful Control Tower CreateManagedAccount event. The lifecycle lambda function will retrieve the Conformity 
+ApiKey from AWS Secrets Manager, then get the External ID for your organization from the Conformity API. Next the lambda 
+function will assume the ControlTowerExecution role in the target Managed Account in order to create the necessary 
+cross account role and associated policy. Finally, a call will be made to the Conformity API to add this Managed Account 
+to your Conformity Organization.
 
 ### Upgrade
 
 As new rules are added to Conformity, it may be necessary on occasion to update the permissions for the application's 
 cross account role. To update the role deployed by the lifecycle hook, update the conformity stack with the latest 
 template which can be found at its original url. The parameter values should not be modified from their original values 
-unless directed by Trend Micro Support.
+unless directed by Trend Micro Support. Updating the cloudformation stack will update the role used by all existing 
+accounts and the role created for future enrollments. 
 
 [original url]:https://s3.amazonaws.com/trend-micro-cloud-one-conformity-controltower-lifecycle/Trend-Micro-Conformity-LifeCycle.yaml
 
