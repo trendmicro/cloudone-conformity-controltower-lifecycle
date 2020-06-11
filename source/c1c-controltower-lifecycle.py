@@ -281,7 +281,7 @@ def lambda_handler(event, context):
         else:
             logger.info(f"Ignoring unhandled cfn request type: {event['RequestType']}")
             response = cfnhelper.cfnResponse(event, context)
-            response.send(cfnhelper.responseCode.FAILED)
+            response.send(cfnhelper.responseCode.SUCCESS)
     elif 'InvokeAction' in event:
         if event['InvokeAction'] == 'configure_account':
             configure_account(event['account_id'])
