@@ -20,7 +20,7 @@ Parameters:
 Mappings:
   LifeCycleRelease:
     Release:
-      Stamp: 1591713437
+      Stamp: 1591972039
 
 Resources:
   ConformityControlTowerResourceBucket:
