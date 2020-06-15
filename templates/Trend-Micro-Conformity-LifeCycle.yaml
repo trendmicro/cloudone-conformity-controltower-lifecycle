@@ -20,7 +20,7 @@ Parameters:
 Mappings:
   LifeCycleRelease:
     Release:
-      Stamp: 1591972039
+      Stamp: 1592234268
 
 Resources:
   ConformityControlTowerResourceBucket:
@@ -109,7 +109,7 @@ Resources:
               for o in objects:
                   key = prefix + o
                   copy_source = {'Bucket': source_bucket, 'Key': key}
-                  logging.info(f'copy_source: {copy_source}\ndest_bucket: {dest_bucket}\nkey: {key}')
+                  print(f'copy_source: {copy_source}\ndest_bucket: {dest_bucket}\nkey: {key}')
                   s3.copy_object(CopySource=copy_source, Bucket=dest_bucket, Key=key)
 
           def delete_objects(bucket, prefix, objects):
@@ -120,18 +120,18 @@ Resources:
           def update_lambda(event, logical_resource_id, object):
               key = event['ResourceProperties']['Prefix'] + event['ResourceProperties']['Objects'][object]
               # only update function code for the zip
-              if (str.endswith("zip")):
+              if (key.endswith("zip")):
                   cloudformationClient = boto3.client('cloudformation')
                   lambdaArn = cloudformationClient.describe_stack_resource(StackName=event['StackId'],
                           LogicalResourceId=logical_resource_id)['StackResourceDetail']['PhysicalResourceId']
-                  logger.info(f'lambdaArn for {logical_resource_id} is {lambdaArn}')
+                  print(f'lambdaArn for {logical_resource_id} is {lambdaArn}')
                   lambdaClient = boto3.client('lambda')
                   response = lambdaClient.update_function_code(FunctionName=lambdaArn,
                           S3Bucket=event['ResourceProperties']['DestBucket'], S3Key=key)
-                  logger.info(f'Response from update_function_call is: {response}')
+                  print(f'Response from update_function_call is: {response}')
 
           def handler(event, context):
-              logger.info(f"Event received by handler: {event}")
+              print(f"Event received by handler: {event}")
               status = cfnresponse.SUCCESS
               try:
                   if event['RequestType'] == 'Delete':
