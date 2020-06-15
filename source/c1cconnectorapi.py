@@ -58,16 +58,16 @@ class CloudOneConformityConnector:
         }
         return self.request(POST, '/accounts', body)
 
-    def remove_account(self, account_id):
-        account_id = self.get_account_id(account_id)
-        return self.request(DELETE, f'/accounts/{account_id}')
+    def remove_account(self, aws_account_id):
+        conformity_account_id = self.get_account_id(aws_account_id)
+        return self.request(DELETE, f'/accounts/{conformity_account_id}')
 
-    def get_account_id(self, account_id):
+    def get_account_id(self, aws_account_id):
         try:
             all_accounts = self.request(GET, '/accounts')
             for account in all_accounts.get('data'):
-                if account.get('attributes').get('awsaccount-id') == account_id:
-                    logger.info('Found account id: ' + account.get('id') + ' for ' + account_id)
+                if account.get('attributes').get('awsaccount-id') == aws_account_id:
+                    logger.info('Found account id: ' + account.get('id') + ' for ' + aws_account_id)
                     return account.get('id')
         except Exception as e:
             logger.info(e)
