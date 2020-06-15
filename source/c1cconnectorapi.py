@@ -23,10 +23,10 @@ class CloudOneConformityConnector:
     def request(self, method, endpoint, body=None):
         if body is not None:
             body = bytes(json.dumps(body), encoding='utf-8')
-        response = json.loads(
-            self.http.request(method, f'{self.base_url}{endpoint}', headers=self.headers, body=body)
-                .data.decode('utf-8')
-        )
+        request_response = self.http.request(method, f'{self.base_url}{endpoint}', headers=self.headers, body=body)
+        logger.info(f'http status for call to {endpoint} '
+                    f'was: {request_response.status} with response: {request_response.data}')
+        response = json.loads(request_response.data.decode('utf-8'))
         return response
 
     def create_external_id(self):
