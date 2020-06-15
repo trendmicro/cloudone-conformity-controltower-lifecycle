@@ -17,23 +17,17 @@ IamPolicyName = "CloudOneConformityConnectorPolicy"
 
 class ConformityPolicyDoc:
     def __init__(self):
-        self.part1 = ""
-        self.part2 = ""
+        self.list_of_policies = []
         self.load_policy_parts()
 
     def load_policy_parts(self):
         s3_client = boto3.client('s3')
         s3_request = s3_client.get_object(Bucket=os.environ['ConformityPolicyBucket'],
                                           Key='iam-policies.json')
-        list_of_policies = json.loads(s3_request['Body'].read().decode('utf-8'))
-        self.part1 = json.dumps(list_of_policies[0].get("document"))
-        self.part2 = json.dumps(list_of_policies[1].get("document"))
+        self.list_of_policies = json.loads(s3_request['Body'].read().decode('utf-8'))
 
-    def part1(self):
-        return self.part1
-
-    def part2(self):
-        return self.part2
+    def list_of_policies(self):
+        return self.list_of_policies
 
 
 def get_api_key():

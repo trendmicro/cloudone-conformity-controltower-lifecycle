@@ -33,26 +33,19 @@ def create_cross_account_role(aws_account_id, c1c_connector):
         logger.info(e)
         raise
     try:
-        logger.info('Creating policy...')
+        logger.info('Creating and attaching policy parts...')
         c1c_policy_document = c1cresources.ConformityPolicyDoc()
-        client.create_policy(PolicyName=f'{c1cresources.IamPolicyName}1',
-                             PolicyDocument=c1c_policy_document.part1
-                             )
-        client.create_policy(PolicyName=f'{c1cresources.IamPolicyName}2',
-                             PolicyDocument=c1c_policy_document.part2
-                             )
-    except Exception as e:
-        logger.info('Failed to create policy')
-        logger.info(e)
-        raise
-    try:
-        logger.info('Attaching policy...')
-        client.attach_role_policy(PolicyArn=f'arn:aws:iam::{aws_account_id}:policy/{c1cresources.IamPolicyName}1',
-                                  RoleName=c1cresources.IamRoleName
-                                  )
-        client.attach_role_policy(PolicyArn=f'arn:aws:iam::{aws_account_id}:policy/{c1cresources.IamPolicyName}2',
-                                  RoleName=c1cresources.IamRoleName
-                                  )
+
+        policy_part = 0
+        for policy in c1c_policy_document.list_of_policies:
+            client.create_policy(PolicyName=f'{c1cresources.IamPolicyName}{policy_part}',
+                                 PolicyDocument=json.dumps(policy.get("document"))
+                                 )
+            client.attach_role_policy(
+                PolicyArn=f'arn:aws:iam::{aws_account_id}:policy/{c1cresources.IamPolicyName}{policy_part}',
+                RoleName=c1cresources.IamRoleName
+                )
+            policy_part += 1
     except Exception as e:
         logger.info('Failed to attach policy')
         logger.info(e)
@@ -216,28 +209,21 @@ def update_policy(aws_account_id):
         configure_account(aws_account_id)
         return
     try:
-        policy_part1 = policy_resource.Policy(f'arn:aws:iam::{aws_account_id}:policy/{c1cresources.IamPolicyName}1')
-        part1_version = policy_part1.default_version
-        p1_new_version_response = client.create_policy_version(
-            PolicyArn=f'arn:aws:iam::{aws_account_id}:policy/{c1cresources.IamPolicyName}1',
-            PolicyDocument=c1c_policy_document.part1,
-            SetAsDefault=True
-        )
-        p1_delete_old_version_response = client.delete_policy_version(
-            PolicyArn=f'arn:aws:iam::{aws_account_id}:policy/{c1cresources.IamPolicyName}1',
-            VersionId=part1_version.version_id
-        )
-        policy_part2 = policy_resource.Policy(f'arn:aws:iam::{aws_account_id}:policy/{c1cresources.IamPolicyName}2')
-        part2_version = policy_part2.default_version
-        p2_new_version_response = client.create_policy_version(
-            PolicyArn=f'arn:aws:iam::{aws_account_id}:policy/{c1cresources.IamPolicyName}2',
-            PolicyDocument=c1c_policy_document.part2,
-            SetAsDefault=True
-        )
-        p2_delete_old_version_response = client.delete_policy_version(
-            PolicyArn=f'arn:aws:iam::{aws_account_id}:policy/{c1cresources.IamPolicyName}2',
-            VersionId=part2_version.version_id
-        )
+        policy_part = 0
+        for policy in c1c_policy_document.list_of_policies:
+            current_policy_object = policy_resource.Policy(
+                f'arn:aws:iam::{aws_account_id}:policy/{c1cresources.IamPolicyName}{policy_part}')
+            current_policy_object_version = current_policy_object.default_version
+            new_policy_object_version_response = client.create_policy_version(
+                PolicyArn=f'arn:aws:iam::{aws_account_id}:policy/{c1cresources.IamPolicyName}{policy_part}',
+                PolicyDocument=json.dumps(policy.get("document")),
+                SetAsDefault=True
+            )
+            delete_old_policy_object_version_response = client.delete_policy_version(
+                PolicyArn=f'arn:aws:iam::{aws_account_id}:policy/{c1cresources.IamPolicyName}{policy_part}',
+                VersionId=current_policy_object_version.version_id
+            )
+            policy_part += 1
     except Exception as e:
         logger.info(f'Failed to update policy {e}')
         raise
