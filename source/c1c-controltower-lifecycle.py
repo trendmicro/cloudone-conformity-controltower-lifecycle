@@ -208,6 +208,16 @@ def update_policy(aws_account_id):
         logger.info(f'Policy not found; configuring account')
         configure_account(aws_account_id)
         return
+    logger.info(f'Updating AssumeRolePolicyDocument in account {aws_account_id}')
+    try:
+        c1c_connector = c1cconnectorapi.CloudOneConformityConnector(c1cresources.get_api_key())
+        update_assume_role_response = client.update_assume_role_policy(
+            RoleName=c1cresources.IamRoleName,
+            PolicyDocument=c1cresources.get_assume_role_policy_document(c1c_connector)
+        )
+    except Exception as e:
+        logger.info(f'Failed to update AssumeRolePolicyDocument: {e}')
+        raise
     try:
         policy_part = 0
         for policy in c1c_policy_document.list_of_policies:

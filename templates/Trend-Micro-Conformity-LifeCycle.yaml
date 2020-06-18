@@ -20,7 +20,7 @@ Parameters:
 Mappings:
   LifeCycleRelease:
     Release:
-      Stamp: 1592234268
+      Stamp: 1592504980
 
 Resources:
   ConformityControlTowerResourceBucket:
@@ -207,6 +207,7 @@ Resources:
                   - "iam:CreatePolicyVersion"
                   - "iam:DeletePolicyVersion"
                   - "iam:SetDefaultPolicyVersion"
+                  - "iam:UpdateAssumeRolePolicy"
                 Resource:
                   - "arn:aws:iam::*:role/CloudOneConformityConnectorRole"
                   - "arn:aws:iam::*:policy/CloudOneConformityConnectorPolicy*"
