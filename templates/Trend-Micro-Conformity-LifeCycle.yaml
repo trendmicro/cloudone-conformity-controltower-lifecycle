@@ -16,6 +16,10 @@ Parameters:
       - us-west-2
     Description: Cloud One Conformity region endpoint for your account
     AllowedPattern : ".+"
+  CloudOneConformitySourceBucket:
+    Description: Location from which to download the conformity iam-policies.json. Leave Default to download from Trend Micro or enter a bucket name to download from your own copy of the policies.
+    Type: String
+    Default: cloudconformity
 
 Mappings:
   LifeCycleRelease:
@@ -80,7 +84,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt 'CopyResourceFunction.Arn'
       DestBucket: !Ref ConformityControlTowerResourceBucket
-      SourceBucket: cloudconformity
+      SourceBucket: !Ref CloudOneConformitySourceBucket
       Nonce: !FindInMap [LifeCycleRelease, Release, Stamp]
       Prefix: ''
       Objects:
